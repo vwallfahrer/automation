@@ -1,0 +1,279 @@
+#!/bin/bash
+
+d="./dev"
+#d="echo $d"
+E=
+#E=echo
+
+crowbar_default_build=${crowbar_default_build:-openstack-os-build}
+
+BASE=./
+
+function usage()
+{
+  echo "Usage: $0 <prepare> <smoke [pullrequest]> <prpending [release]>"
+  echo "  $0 prepare"
+  echo "          once setups the environment needed to run mkcloud based"
+  echo "          smoketests on this machine"
+  echo
+  echo "  $0 smoke barclamp-crowbar/pull/4711"
+  echo "          run smoketests with pull request 4711 for barclamp crowbar"
+  echo
+  echo "  $0 prpending roxy"
+  echo "          list pending pull requests for roxy release"
+  exit 1
+}
+
+function check_exit()
+{
+  code=$1
+  reason=${2:-unknown}
+  if [ $code != 0 ] ; then
+    echo "Detected exit code: $code ...aborting"
+    echo "Exited with code $code at step: $reason" | tee -a $BASE/failed.step
+    exit $code
+  else
+    echo "Finished step: $reason" | tee -a $BASE/succeeded.step
+  fi
+}
+
+function clean_barclamps()
+{
+  crowdir="~/crowbar"
+  if [ ! -d $crowdir ] ; then
+    echo "Error: No crowbar checkout found at $crowdir"
+    exit 11
+  fi
+  pushd $crowdir
+  check_exit $? "cd to crowbar directory"
+  for i in `ls barclamps` ; do [ ! -d barclamps/$i ] && continue ; pushd barclamps/$i ; git reset --hard HEAD ; git clean -f ; popd ; done
+  popd
+}
+
+function defaultcloudrc()
+{
+  rc=${1:-cloud.rc}
+  cat > $rc <<EOCLOUDRC
+#!/bin/bash
+
+export cephvolumenumber=2
+export cloudsource=develcloudX
+export nodenumber=2
+export debug=0
+EOCLOUDRC
+}
+
+function ssh_key_check()
+{
+  mkdir -p ~/.ssh
+  if ! [ -f ~/.ssh/github-susecloudapi-id_rsa  && -f ~/.ssh/github-susecloudapi-id_rsa.pub ] ; then
+    echo "Error: The SSH Key files of the user 'susecloudapi' are missing."
+    echo "Please copy them to ~/.ssh here manually."
+    exit 10
+  fi
+
+  grep -q github-susecloudapi-id_rsa ~/.ssh/config 2>/dev/null || cat >> ~/.ssh/config <<EOSSH
+Host github.com
+IdentityFile ~/.ssh/github-susecloudapi-id_rsa
+NumberOfPasswordPrompts 0
+UserKnownHostsFile /dev/null
+StrictHostKeyChecking no
+EOSSH
+}
+
+function netrc_check()
+{
+  if ! [ `grep "github.com login susecloudapi" ~/.netrc | wc -l`  == 2 ] ; then
+    echo "Error: The netrc file for the github user susecloudapi is missing."
+    echo "Please copy it here manually."
+  fi
+}
+
+function prepare()
+{
+  rel=${1:-nonenonenone}
+  if ! echo $BASH_VERSION | grep -q ^4 ; then
+    $E zypper lr | grep -q shellsSP3 || zypper ar http://download.opensuse.org/repositories/shells/SLE_11_SP3/ shellsSP3
+    $E zypper -v --gpg-auto-import-keys --no-gpg-checks -n ref
+    $E zypper in -y 'bash>=4.2'
+  fi
+
+  $E [ -x ~/bin/update_automation ] || curl https://raw.github.com/SUSE-Cloud/automation/master/scripts/jenkins/update_automation | bash
+  $E update_automation mkcloud
+  $E [ -f ~/cloud.rc ] || defaultcloudrc ~/cloud.rc
+
+  $E git config --global user.email doesnotexist@example.com
+  $E git config --global user.name "SUSE Cloud API"
+
+  $E cd ~
+  if [ -d ~/crowbar/.git ] ; then
+    echo "crowbar repo is already cloned"
+    $E cd crowbar
+  else
+    $E git clone ssh://git@github.com/crowbar/crowbar.git
+    $E pushd crowbar
+    $E $d setup --no-github
+    $E $d switch $rel/crowbar_default_build
+    $E $d pull-requests fetch
+    popd
+  fi
+}
+
+function crowbar_clean_check()
+{
+  pushd ~/crowbar
+  if ! $d switch ; then
+    $E clean_barclamps
+    $d switch
+
+    if [ $? != 0 ] ; then
+      echo "Could not switch to clean state"
+      exit 1
+    fi
+  fi
+  popd
+}
+
+
+function smoker()
+{
+  bc=$1
+  if [ -z "$bc" ] ; then
+    echo "Error: no barclamp to smoketest"
+    return 12
+  fi
+  . ~/cloud.rc
+  . ./cloud.rc
+  check_exit $? "sourcing cloud.rc"
+  $E mkcloud cleanup prepare setupadmin prepareinstcrowbar
+  check_exit $? "within mkcloud first steps: cleanup prepare setupadmin prepareinstcrowbar"
+
+  $E rsync -av --exclude ".git" --exclude ".ci-tracking" ./crowbar root@crowbar:/root/
+  check_exit $? "rsync git repo to crowbar node"
+
+  # make sure active_record is not removed from the framework
+  $E ssh root@crowbar 'sed -i.bak -e "s/^  config.frameworks -= \[ :active_record \]/# removed removal of active_record from installed file/" /opt/dell/crowbar_framework/config/environment.rb'
+  check_exit $? "drop removal of active record framework (installed file)"
+  $E ssh root@crowbar 'sed -i.bak -e "s/^  config.frameworks -= \[ :active_record \]/# removed removal of active_record from git file/" /root/crowbar/barclamps/crowbar/crowbar_framework/config/environment.rb'
+  check_exit $? "drop removal of active record framework (git file)"
+  $E mkcloud instcrowbarfromgit
+  check_exit $? "mkcloud instcrowbarfromgit"
+
+  $E ssh root@crowbar '/opt/dell/bin/barclamp_install.rb --force  $(find /root/crowbar/barclamps/* -maxdepth 0 -type d -print)'
+  check_exit $? "barclamp-install.rb"
+  $E ssh root@crowbar 'cp -a /root/crowbar/change-image/dell/* /opt/dell/bin/'
+  check_exit $? "cp dell bins to opt-dell-bin"
+
+  # get the nodes discovered
+  $E mkcloud setupcompute
+  check_exit $? "mkcloud setupcompute"
+  # TODO use wait function from mkcloud
+  sleep 240
+
+  $E ssh root@crowbar "DEBUG=y /opt/dell/bin/smoketest $bc"
+  sret=$?
+  echo "Smoketest returned with exitcode: $sret"
+  echo "$sret" > smoketest.exitcode
+  $E ssh root@crowbar 'if grep -q "^Passed$" /var/log/smoketest/crowbar.test ; then exit 0 ; else exit 1 ; fi'
+  tret=$?
+  echo "Manual success test returned exitcode: $tret"
+  echo "$tret" > smoketest.did-it-pass-exitcode
+
+  $E ssh root@crowbar 'BZIP2="-9" tar -cjvf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /var/log/smoketest* /opt/dell/bin'
+  scp "root@crowbar:/root/smoke-logs-*" .
+
+  return $tret
+}
+
+function smoke()
+{
+  PR=${1:-none}
+  BASE=~/tobacco/$PR
+  # TODO: refetching regularly
+  #   ./dev fetch
+  #   ./dev pull-requests fetch
+
+  pushd ~/crowbar
+  pr=`$d pull-requests list | grep "${PR}$" | head -1`
+  if [ -z "$pr" ] ; then
+    echo "Error: no pull request found that matches: ${PR}"
+    echo "Maybe we need to refetch the pull requests."
+    exit 13
+  fi
+
+  echo $pr
+  pr_id=`echo $pr | cut -d":" -f1`
+  pr_show=`$d pull-requests show $pr_id`
+  pr_release=`echo "$pr_show" | grep "^Release" | sed -e "s/^Release:\s*//"`
+
+  $E $d switch $pr_release/$crowbar_default_build
+  check_exit $? "dev switch to release/build"
+  $E $d pull-requests checkout $pr_id
+  check_exit $? "dev pull-requests checkout"
+  popd
+
+  mkdir -p ~/tobacco/$PR
+  $E rsync -a --exclude ".git" --exclude ".ci-tracking" ~/crowbar tobacco/$PR
+  pushd ~/tobacco/$PR
+
+  pushd ~/tobacco/$PR/crowbar
+  barclamps=$(for i in `ls barclamps | grep -v tempest` ; do [ -f "barclamps/$i" -o -e "barclamps/$i/README.empty-branch" ] || echo "$i" ; done)
+  barclamps=`echo $barclamps`
+  echo "Running the smoketests for these barclamps: $barclamps"
+  popd
+
+  defaultcloudrc cloud.rc
+  case $pr_release in
+    roxy)
+      sed -i -e "s/=develcloud.*/=develcloud3/g" cloud.rc
+    ;;
+    pebbles)
+      sed -i -e "s/=develcloud.*/=develcloud2.0/g" cloud.rc
+    ;;
+  esac
+  $E smoker $barclamps
+  ret=$?
+  check_exit $ret "smoke test return code"
+  popd
+}
+
+function prpending()
+{
+  rel=${1:-none}
+  # TODO: refetching regularly
+  #   ./dev fetch
+  #   ./dev pull-requests fetch
+
+  pushd ~/crowbar
+  $d pull-requests list | grep ": ($rel "
+  popd
+}
+
+### main ###
+
+if [ -z "$1" ] ; then
+  usage
+fi
+
+case $1 in
+  prepare)
+    [ -z "$1" ] && usage
+    ssh_key_check
+    netrc_check
+    prepare $1
+    ;;
+  smoke)
+    crowbar_clean_check
+    [ -z "$2" ] && usage
+    echo $2 | grep -q "[[:alnum:]_-]\+/pull/[[:digit:]]\+" || usage
+    smoke $2
+    ;;
+  prpending)
+    [ -z "$2" ] && usage
+    prpending $2
+    ;;
+  *)
+    usage
+    ;;
+esac
+
