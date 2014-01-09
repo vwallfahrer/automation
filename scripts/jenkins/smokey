@@ -153,22 +153,35 @@ function smoker()
 
   # make sure active_record is not removed from the framework
   $E ssh root@crowbar 'sed -i.bak -e "s/^  config.frameworks -= \[ :active_record \]/# removed removal of active_record from installed file/" /opt/dell/crowbar_framework/config/environment.rb'
-  check_exit $? "drop removal of active record framework (installed file)"
+  # no check, as the file may be missing
   $E ssh root@crowbar 'sed -i.bak -e "s/^  config.frameworks -= \[ :active_record \]/# removed removal of active_record from git file/" /root/crowbar/barclamps/crowbar/crowbar_framework/config/environment.rb'
   check_exit $? "drop removal of active record framework (git file)"
+
+  $E ssh root@crowbar 'for i in `zypper lr -d | grep SDK | cut -d" " -f1` ; do zypper rr $i ; done'
+  check_exit $? "disable SDK repo if present"
+
+  #$E ssh root@crowbar 'mkdir -p /opt/dell/bin/ ; cp -a /root/crowbar/change-image/dell/* /root/crowbar/extra/*  /opt/dell/bin/'
+  #check_exit $? "cp dell bins to opt-dell-bin"
+
+  $E ssh root@crowbar 'zypper --non-interactive install --force crowbar'
+  check_exit $? "install crowbar via zypper"
+
+  #$E ssh root@crowbar 'sed -i.bak -e "s/sleshammer tcpdump/sleshammer tcpdump rubygem-sqlite3/" /opt/dell/bin/install-chef-suse.sh'
+  #$E ssh root@crowbar 'sed -i.bak -e "s/rubygem-activesupport/rubygem-activesupport>=2.3.17/" /opt/dell/bin/install-chef-suse.sh'
+  #check_exit $? "sed the activesupport version"
+
+  $E ssh root@crowbar "mkdir -p /opt/dell ; touch /opt/dell/.all_nets"
+  check_exit $? "prevent public and storage net to be created"
+
   $E mkcloud instcrowbarfromgit
   check_exit $? "mkcloud instcrowbarfromgit"
 
   $E ssh root@crowbar '/opt/dell/bin/barclamp_install.rb --force  $(find /root/crowbar/barclamps/* -maxdepth 0 -type d -print)'
   check_exit $? "barclamp-install.rb"
-  $E ssh root@crowbar 'cp -a /root/crowbar/change-image/dell/* /opt/dell/bin/'
-  check_exit $? "cp dell bins to opt-dell-bin"
 
   # get the nodes discovered
   $E mkcloud setupcompute
   check_exit $? "mkcloud setupcompute"
-  # TODO use wait function from mkcloud
-  sleep 240
 
   $E ssh root@crowbar "DEBUG=y /opt/dell/bin/smoketest $bc"
   sret=$?
