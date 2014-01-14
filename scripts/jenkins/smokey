@@ -186,6 +186,13 @@ function smoker()
   $E mkcloud setupcompute
   check_exit $? "mkcloud setupcompute"
 
+  # wait functions taken from qa_crowbarsetup
+  $E ssh root@crowbar 'echo -n "waiting for nodes:" ; while test $(crowbar machines list | grep ^d|wc -l)'" -lt $nodenumber ; do echo -n . ; sleep 10 ; done ; echo"
+  $E ssh root@crowbar 'echo -n "waiting for nodes to be discovered" ;
+    for node in $(crowbar machines list | grep ^d) ; do
+      n=100; while test $n -gt 0 && ! knife node show -a state $node | grep discovered ; do
+        echo -n . ; sleep 10 ; echo "another 50s" ; sleep 50 ; echo "done" ; done ; done'
+
   $E ssh root@crowbar "DEBUG=y /opt/dell/bin/smoketest $bc"
   sret=$?
   echo "Smoketest returned with exitcode: $sret"
