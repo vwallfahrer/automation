@@ -190,15 +190,14 @@ function smoker()
   sret=$?
   echo "Smoketest returned with exitcode: $sret"
   echo "$sret" > smoketest.exitcode
-  $E ssh root@crowbar 'if grep -q "^Passed$" /var/log/smoketest/crowbar.test ; then exit 0 ; else exit 1 ; fi'
-  tret=$?
-  echo "Manual success test returned exitcode: $tret"
-  echo "$tret" > smoketest.did-it-pass-exitcode
 
   $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
   scp "root@crowbar:/root/smoke-logs-*" .
 
-  return $tret
+  # show some relevant log lines
+  $E ssh root@crowbar 'grep -i Failed /var/log/smoketest/*'
+
+  return $sret
 }
 
 function smoke()
