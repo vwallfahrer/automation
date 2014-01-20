@@ -5,6 +5,10 @@ d="./dev"
 E=
 #E=echo
 
+# redirect stdin
+# (prevent subprocesses like ssh to read from outer stdin)
+exec </dev/null
+
 crowbar_default_build=${crowbar_default_build:-openstack-os-build}
 
 BASE=./
