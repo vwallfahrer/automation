@@ -220,7 +220,12 @@ function smoke()
   #   ./dev pull-requests fetch
 
   pushd ~/crowbar
-  pr=`$d pull-requests list | grep "${PR}$" | head -1`
+  GREP="${PR}$"
+  if [[ "${PR}" =~ "multiple/pull" ]] ; then
+    id=${PR##*/}
+    GREP="^$id.*Multiple"
+  fi
+  pr=`$d pull-requests list | grep "$GREP" | head -1`
   if [ -z "$pr" ] ; then
     echo "Error: no pull request found that matches: ${PR}"
     echo "Maybe we need to refetch the pull requests."
