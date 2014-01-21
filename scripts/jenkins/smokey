@@ -202,7 +202,7 @@ function smoker()
   echo "Smoketest returned with exitcode: $sret"
   echo "$sret" > smoketest.exitcode
 
-  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
+  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/screenlog* /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
   scp "root@crowbar:/root/smoke-logs-*" .
 
   # show some relevant log lines
