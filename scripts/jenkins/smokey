@@ -28,12 +28,19 @@ function usage()
   exit 1
 }
 
+function fetch_logs()
+{
+  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /root/screenlog* /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
+  $E scp "root@crowbar:/root/smoke-logs-*" .
+}
+
 function check_exit()
 {
   code=$1
   reason=${2:-unknown}
   if [ $code != 0 ] ; then
-    echo "Detected exit code: $code ...aborting"
+    echo "Detected exit code: $code ...aborting after fetching logs"
+    fetch_logs
     echo "Exited with code $code at step: $reason" | tee -a $BASE/failed.step
     exit $code
   else
@@ -202,8 +209,7 @@ function smoker()
   echo "Smoketest returned with exitcode: $sret"
   echo "$sret" > smoketest.exitcode
 
-  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/screenlog* /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
-  scp "root@crowbar:/root/smoke-logs-*" .
+  $E fetch_logs
 
   # show some relevant log lines
   $E ssh root@crowbar 'grep -i Failed /var/log/smoketest/*'
