@@ -219,13 +219,13 @@ function smoker()
 
 function smoke()
 {
-  PR=${1:-none}
-  BASE=~/tobacco/$PR
+  PRstring=${1:-none}
+  BASE=~/tobacco
 
   pushd ~/crowbar
-  GREP="${PR}$"
-  if [[ "${PR}" =~ "multiple/pull" ]] ; then
-    id=${PR##*/}
+  GREP="${PRstring}$"
+  if [[ "${PRstring}" =~ "multiple/pull" ]] ; then
+    id=${PRstring##*/}
     GREP="^$id.*Multiple"
   fi
   pr=
@@ -239,7 +239,7 @@ function smoke()
   done
 
   if [ -z "$pr" ] ; then
-    echo "Error: no pull request found that matches: ${PR}"
+    echo "Error: no pull request found that matches: ${PRstring}"
     exit 13
   fi
 
@@ -247,6 +247,9 @@ function smoke()
   pr_id=`echo $pr | cut -d":" -f1`
   pr_show=`$d pull-requests show $pr_id`
   pr_release=`echo "$pr_show" | grep "^Release" | sed -e "s/^Release:\s*//"`
+  PR=`echo $pr_show | sed -e "s#.*https://github.com/crowbar/##"`
+
+  BASE=~/tobacco/$PR
 
   $E $d switch $pr_release/$crowbar_default_build
   check_exit $? "dev switch to release/build"
