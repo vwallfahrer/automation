@@ -221,9 +221,6 @@ function smoke()
 {
   PR=${1:-none}
   BASE=~/tobacco/$PR
-  # TODO: refetching regularly
-  #   ./dev fetch
-  #   ./dev pull-requests fetch
 
   pushd ~/crowbar
   GREP="${PR}$"
@@ -231,10 +228,18 @@ function smoke()
     id=${PR##*/}
     GREP="^$id.*Multiple"
   fi
-  pr=`$d pull-requests list | grep "$GREP" | head -1`
+  pr=
+  for i in 1 2 ; do
+    pr=`$d pull-requests list | grep "$GREP" | head -1`
+    [ -n "$pr" ] && break
+    [ -z "$pr" ] && [ $i = 2 ] && break
+    $E rm -rf .ci-tracking/
+    $E $d fetch
+    $E $d pull-requests fetch
+  done
+
   if [ -z "$pr" ] ; then
     echo "Error: no pull request found that matches: ${PR}"
-    echo "Maybe we need to refetch the pull requests."
     exit 13
   fi
 
@@ -277,9 +282,6 @@ function smoke()
 function prpending()
 {
   rel=${1:-none}
-  # TODO: refetching regularly
-  #   ./dev fetch
-  #   ./dev pull-requests fetch
 
   pushd ~/crowbar
   $d pull-requests list | grep ": ($rel "
