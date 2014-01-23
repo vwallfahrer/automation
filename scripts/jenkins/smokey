@@ -196,6 +196,12 @@ function smoker()
   $E mkcloud instcrowbarfromgit
   check_exit $? "mkcloud instcrowbarfromgit"
 
+  $E ssh root@crowbar 'F=/srv/tftpboot/files/ami ; mkdir -p $F ;
+    for I in ubuntu-12.04-server-cloudimg-amd64.tar.gz precise-server-cloudimg-amd64.qcow2 ; do
+      wget --progress=dot:mega --directory-prefix $F http://clouddata.cloud.suse.de/images/cloud-images.ubuntu.com/releases/precise/release/$I ;
+    done'
+  check_exit $? "downlaod ubuntu cloud image for glance test"
+
   $E ssh root@crowbar '/opt/dell/bin/barclamp_install.rb --force  $(find /root/crowbar/barclamps/* -maxdepth 0 -type d -print)'
   check_exit $? "barclamp-install.rb"
 
