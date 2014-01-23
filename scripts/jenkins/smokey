@@ -5,9 +5,14 @@ d="./dev"
 E=
 #E=echo
 
+SLOG=`mktemp ~/smokey.log.XXXXX`
+
 # redirect stdin
 # (prevent subprocesses like ssh to read from outer stdin)
 exec </dev/null
+exec 7>&1
+exec 1> >(tee $SLOG)
+exec 2>&1
 
 crowbar_default_build=${crowbar_default_build:-openstack-os-build}
 
@@ -42,6 +47,7 @@ function check_exit()
     echo "Detected exit code: $code ...aborting after fetching logs"
     fetch_logs
     echo "Exited with code $code at step: $reason" | tee -a $BASE/failed.step
+    [ -e $SLOG ] && mv $SLOG $BASE/
     exit $code
   else
     echo "Finished step: $reason" | tee -a $BASE/succeeded.step
@@ -247,9 +253,14 @@ function smoke()
   pr_id=`echo $pr | cut -d":" -f1`
   pr_show=`$d pull-requests show $pr_id`
   pr_release=`echo "$pr_show" | grep "^Release" | sed -e "s/^Release:\s*//"`
-  PR=`echo $pr_show | sed -e "s#.*https://github.com/crowbar/##"`
+  PR=`echo "$pr_show" | grep "^Pull Request URL"  | head -1 |  sed -e "s#.*https://github.com/crowbar/##"`
 
   BASE=~/tobacco/$PR
+  mkdir -p $BASE
+  exec 1>&7 2>&7 7>&-
+  mv $SLOG $BASE/smokey.log
+  exec 7>&1 1> >(tee -a $BASE/smokey.log)
+  exec 2>&1
 
   $E $d switch $pr_release/$crowbar_default_build
   check_exit $? "dev switch to release/build"
@@ -257,11 +268,10 @@ function smoke()
   check_exit $? "dev pull-requests checkout"
   popd
 
-  mkdir -p ~/tobacco/$PR
-  $E rsync -a --exclude ".git" --exclude ".ci-tracking" ~/crowbar tobacco/$PR
-  pushd ~/tobacco/$PR
+  $E rsync -a --exclude ".git" --exclude ".ci-tracking" ~/crowbar $BASE
+  pushd $BASE
 
-  pushd ~/tobacco/$PR/crowbar
+  pushd $BASE/crowbar
   barclamps=$(for i in `ls barclamps | grep -v tempest` ; do [ -f "barclamps/$i" -o -e "barclamps/$i/README.empty-branch" ] || echo "$i" ; done)
   barclamps=`echo $barclamps`
   echo "Running the smoketests for these barclamps: $barclamps"
