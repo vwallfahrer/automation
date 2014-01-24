@@ -231,20 +231,17 @@ function smoker()
 
 function smoke()
 {
-  PRstring=${1:-none}
+  PRstring=${1:-none-none-none}
   BASE=~/tobacco
 
   pushd ~/crowbar
-  GREP="${PRstring}$"
-  if [[ "${PRstring}" =~ "multiple/pull" ]] ; then
-    id=${PRstring##*/}
-    GREP="^$id.*Multiple"
-  fi
   pr=
   for i in 1 2 ; do
-    pr=`$d pull-requests list | grep "$GREP" | head -1`
+    pr=`$d pull-requests list | grep "$PRstring\s*$" | head -1`
     [ -n "$pr" ] && break
     [ -z "$pr" ] && [ $i = 2 ] && break
+    $E git clean -f
+    $E $d switch
     $E rm -rf .ci-tracking/
     $E $d fetch
     $E $d pull-requests fetch
@@ -256,10 +253,20 @@ function smoke()
   fi
 
   echo $pr
-  pr_id=`echo $pr | cut -d":" -f1`
+  pr_id=`echo "$pr" | cut -d":" -f1`
   pr_show=`$d pull-requests show $pr_id`
   pr_release=`echo "$pr_show" | grep "^Release" | sed -e "s/^Release:\s*//"`
-  PR=`echo "$pr_show" | grep "^Pull Request URL"  | head -1 |  sed -e "s#.*https://github.com/crowbar/##"`
+  PR=
+  if [[ $pr =~ "Multiple)" ]] ; then
+    PR="multiple/pull/$pr_id"
+  else
+    PR=`echo "$pr_show" | grep "^Pull Request URL"  | head -1 |  sed -e "s#.*https://github.com/crowbar/##"`
+  fi
+
+  if [ -z "$PR" ] ; then
+    echo "Error: no pull request found."
+    exit 14
+  fi
 
   BASE=~/tobacco/$PR
   mkdir -p $BASE
@@ -322,9 +329,9 @@ case $1 in
     ;;
   smoke)
     crowbar_clean_check
-    [ -z "$2" ] && usage
-    echo $2 | grep -q "[[:alnum:]_-]\+/pull/[[:digit:]]\+" || usage
-    smoke $2
+    shift
+    [ -z "$1" ] && usage
+    smoke "$@"
     ;;
   prpending)
     [ -z "$2" ] && usage
