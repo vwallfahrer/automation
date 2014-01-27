@@ -39,18 +39,28 @@ function fetch_logs()
   $E scp "root@crowbar:/root/smoke-logs-*" .
 }
 
-function check_exit()
+function log_step()
 {
   code=$1
   reason=${2:-unknown}
   if [ $code != 0 ] ; then
     echo "Detected exit code: $code ...aborting after fetching logs"
-    fetch_logs
     echo "Exited with code $code at step: $reason" | tee -a $BASE/failed.step
-    [ -e $SLOG ] && mv $SLOG $BASE/
-    exit $code
   else
     echo "Finished step: $reason" | tee -a $BASE/succeeded.step
+  fi
+}
+
+function check_exit()
+{
+  code=$1
+  reason=${2:-unknown}
+  log_step "$code" "$reason"
+
+  if [ $code != 0 ] ; then
+    fetch_logs
+    [ -e $SLOG ] && mv $SLOG $BASE/
+    exit $code
   fi
 }
 
@@ -301,7 +311,7 @@ function smoke()
   esac
   $E smoker $barclamps
   ret=$?
-  check_exit $ret "smoke test return code"
+  log_step $ret "smoke test return code: $ret"
   popd
 }
 
