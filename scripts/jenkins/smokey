@@ -24,7 +24,7 @@ function usage()
 {
   echo "Usage: $0 <prepare> <smoke [pullrequest]> <prpending [release]>"
   echo "  $0 prepare"
-  echo "          once setups the environment needed to run mkcloud based"
+  echo "          once setup the environment needed to run mkcloud based"
   echo "          smoketests on this machine"
   echo
   echo "  $0 smoke barclamp-crowbar/pull/4711"
@@ -33,6 +33,39 @@ function usage()
   echo "  $0 prpending roxy"
   echo "          list pending pull requests for roxy release"
   exit 1
+}
+
+function clear_crowbar_checkout()
+{
+  pushd ~/crowbar
+  $E rm -rf .ci-tracking/
+  $E git clean -f
+  $E $d switch
+  $E rm -f ~/prlist{,.tac}
+  popd
+}
+
+function crowbar_refetch()
+{
+  pushd ~/crowbar
+  $E git clean -f
+  $E $d switch
+  $E $d fetch
+  $E $d sync
+  $E $d pull-requests fetch
+  $E rm -f ~/prlist{,.tac}
+  popd
+}
+
+function make_prlist()
+{
+  rel=${1:-RELEASE}
+  prfile=~/prlist
+  echo "creating $prfile for $rel"
+  pushd ~/crowbar
+  $E $d pull-requests list | grep "($rel" | sed -e "s/^[0-9]\+: //" > $prfile
+  $E tac $prfile > ${prfile}.tac
+  popd
 }
 
 function fetch_logs()
@@ -255,11 +288,7 @@ function smoke()
     pr=`$d pull-requests list | grep "$PRstring\s*$" | head -1`
     [ -n "$pr" ] && break
     [ -z "$pr" ] && [ $i = 2 ] && break
-    $E git clean -f
-    $E $d switch
-    $E rm -rf .ci-tracking/
-    $E $d fetch
-    $E $d pull-requests fetch
+    clear_crowbar_checkout
   done
 
   if [ -z "$pr" ] ; then
@@ -353,6 +382,26 @@ case $1 in
   prpending)
     [ -z "$2" ] && usage
     prpending $2
+    ;;
+  prlist)
+    shift
+    make_prlist $1
+    ;;
+  clear)
+    clear_crowbar_checkout
+    ;;
+  refetch)
+    crowbar_refetch
+    shift
+    [ -z "$1" ] && usage
+    make_prlist $1
+    ;;
+  refresh)
+    clear_crowbar_checkout
+    crowbar_refetch
+    shift
+    [ -z "$1" ] && usage
+    make_prlist $1
     ;;
   *)
     usage
