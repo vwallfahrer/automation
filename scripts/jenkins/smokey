@@ -165,7 +165,7 @@ function crowbar_clean_check()
 
 function smoker()
 {
-  bc=$1
+  bc="$@"
   if [ -z "$bc" ] ; then
     echo "Error: no barclamp to smoketest"
     return 12
@@ -266,6 +266,7 @@ function smoke()
   pr_id=`echo "$pr" | cut -d":" -f1`
   pr_show=`$d pull-requests show $pr_id`
   pr_release=`echo "$pr_show" | grep "^Release" | sed -e "s/^Release:\s*//"`
+  pr_barclamps=`echo "neutron glance nova" ; (echo "$pr_show" | grep "^Repo:" | sed -e "s/^Repo:\s\+barclamp-//" | grep -Ev "^(neutron|glance|nova)$" | sort | uniq )`
   PR=
   if [[ $pr =~ "Multiple)" ]] ; then
     PR="multiple/pull/$pr_id"
@@ -295,8 +296,9 @@ function smoke()
   pushd $BASE
 
   pushd $BASE/crowbar
-  barclamps=$(for i in `ls barclamps | grep -v tempest` ; do [ -f "barclamps/$i" -o -e "barclamps/$i/README.empty-branch" ] || echo "$i" ; done)
-  barclamps=`echo $barclamps`
+  #barclamps=$(for i in `ls barclamps | grep -v tempest` ; do [ -f "barclamps/$i" -o -e "barclamps/$i/README.empty-branch" ] || echo "$i" ; done)
+  #barclamps=`echo $barclamps`
+  barclamps=$pr_barclamps
   echo "Running the smoketests for these barclamps: $barclamps"
   popd
 
@@ -309,7 +311,7 @@ function smoke()
       sed -i -e "s/=develcloud.*/=develcloud2.0/g" cloud.rc
     ;;
   esac
-  $E smoker $barclamps
+  $E smoker "$barclamps"
   ret=$?
   log_step $ret "smoke test return code: $ret"
   popd
