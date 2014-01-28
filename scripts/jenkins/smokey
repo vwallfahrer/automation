@@ -17,6 +17,8 @@ exec 2>&1
 crowbar_default_build=${crowbar_default_build:-openstack-os-build}
 
 BASE=./
+PR=
+pr=
 
 function usage()
 {
@@ -175,6 +177,9 @@ function smoker()
   check_exit $? "sourcing cloud.rc"
   $E mkcloud cleanup prepare setupadmin prepareinstcrowbar
   check_exit $? "within mkcloud first steps: cleanup prepare setupadmin prepareinstcrowbar"
+
+  $E ssh root@crowbar "echo 'This instance is smoketesting the pullrequest: $PR' >> /etc/motd"
+  $E ssh root@crowbar "echo 'Pull request: $pr' >> /etc/motd"
 
   $E rsync -av --exclude ".git" --exclude ".ci-tracking" ./crowbar root@crowbar:/root/
   check_exit $? "rsync git repo to crowbar node"
