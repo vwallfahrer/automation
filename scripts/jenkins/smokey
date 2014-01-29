@@ -254,6 +254,13 @@ function smoker()
   $E ssh root@crowbar '/opt/dell/bin/barclamp_install.rb --force  $(find /root/crowbar/barclamps/* -maxdepth 0 -type d -print)'
   check_exit $? "barclamp-install.rb"
 
+  $E ssh root@crowbar "echo \"sed '/generate_certs/ s/false/true/'\" > /opt/dell/barclamps/swift/smoketest/modify-json"
+  check_exit $? "workaround, create ssl cert for swift"
+  $E ssh root@crowbar "sed -i -e 's/sudo apt-get install -y python-swiftclient/sudo zypper -n in python-swiftclient/'  /opt/dell/barclamps/swift/smoketest/00-swift-deploy.test"
+  $E ssh root@crowbar "sed -i -e 's/sudo apt-get install -y python-glanceclient/sudo zypper -n in python-glanceclient/'  /opt/dell/barclamps/glance/smoketest/00-check-images.test"
+  log_step $? "workaround, fixing apt-get"
+
+
   # get the nodes discovered
   $E mkcloud setupcompute
   check_exit $? "mkcloud setupcompute"
