@@ -213,6 +213,7 @@ function smoker()
 
   $E ssh root@crowbar "echo 'This instance is smoketesting the pullrequest: $PR' >> /etc/motd"
   $E ssh root@crowbar "echo 'Pull request: $pr' >> /etc/motd"
+  $E ssh root@crowbar "echo 'Running smoketests of these barclamps: $bc' >> /etc/motd"
 
   $E rsync -av --exclude ".git" --exclude ".ci-tracking" ./crowbar root@crowbar:/root/
   check_exit $? "rsync git repo to crowbar node"
@@ -331,8 +332,7 @@ function smoke()
 
   pushd $BASE/crowbar
   #barclamps=$(for i in `ls barclamps | grep -v tempest` ; do [ -f "barclamps/$i" -o -e "barclamps/$i/README.empty-branch" ] || echo "$i" ; done)
-  #barclamps=`echo $barclamps`
-  barclamps=$pr_barclamps
+  barclamps=`echo $pr_barclamps`
   echo "Running the smoketests for these barclamps: $barclamps"
   popd
 
