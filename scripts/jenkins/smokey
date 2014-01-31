@@ -70,7 +70,7 @@ function make_prlist()
 
 function fetch_logs()
 {
-  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjvf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /root/screenlog* /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
+  $E ssh root@crowbar 'touch /var/log/smoketest-nonempty ;  BZIP2="-9" tar -cjf /root/smoke-logs-`date +%F-%H-%M-%S`.tar.bz2 /root/screenlog* /var/log/smoketest* /var/log/crowbar* /var/log/chef* /var/chef /opt/dell/bin'
   $E scp "root@crowbar:/root/smoke-logs-*" .
 }
 
@@ -265,11 +265,18 @@ function smoker()
       n=100; while test $n -gt 0 && ! knife node show -a state $node | grep discovered ; do
         echo -n . ; sleep 10 ; echo "another 50s" ; sleep 50 ; echo "done" ; done ; done'
 
-  $E ssh root@crowbar "DEBUG=y /opt/dell/bin/smoketest $bc"
-  sret=$?
-  echo "Smoketest returned with exitcode: $sret"
-  echo "$sret" > smoketest.exitcode
-
+  ret=0
+  for b in $bc ; do
+    $E ssh root@crowbar "DEBUG=y /opt/dell/bin/smoketest $b"
+    oneret=$?
+    echo "Smoketest $b returned with exitcode: $oneret"
+    echo "------------"
+    echo "$oneret" > smoketest.${b}.exitcode
+    echo "------------"
+    $E ssh root@crowbar "tail -n25 /var/log/smoketest/${b}-smoketest.log"
+    echo "============"
+    [ 0 != $oneret ] && ret=$oneret
+  done
   $E fetch_logs
 
   # show some relevant log lines
