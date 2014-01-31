@@ -281,6 +281,14 @@ function smoker()
 
   # show some relevant log lines
   $E ssh root@crowbar 'grep -i Failed /var/log/smoketest/*'
+  sret=$?
+  if [ 0 = $sret ] ; then
+    sret=1
+    log_step $sret "Overall smoketest result: failed"
+  else
+    sret=0
+    log_step $sret "Overall smoketest result: succeeded"
+  fi
 
   return $sret
 }
@@ -292,6 +300,12 @@ function smoke()
 
   pushd ~/crowbar
   pr=
+  echo "==def fetch latest changes:"
+  $E $d fetch
+  $E $d sync
+  echo "==def pull-requests fetch latest pull requests:"
+  $E $d pull-requests fetch
+
   for i in 1 2 ; do
     pr=`$d pull-requests list | grep "$PRstring\s*$" | head -1`
     [ -n "$pr" ] && break
@@ -301,6 +315,7 @@ function smoke()
 
   if [ -z "$pr" ] ; then
     echo "Error: no pull request found that matches: ${PRstring}"
+    log_step 1 "Error: no pull request found that matches: ${PRstring}"
     exit 13
   fi
 
@@ -331,7 +346,7 @@ function smoke()
   $E $d switch $pr_release/$crowbar_default_build
   check_exit $? "dev switch to release/build"
   $E $d pull-requests checkout $pr_id
-  check_exit $? "dev pull-requests checkout"
+  check_exit $? "dev pull-requests checkout $pr_id: $PR"
   popd
 
   $E rsync -a --exclude ".git" --exclude ".ci-tracking" ~/crowbar $BASE
