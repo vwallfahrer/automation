@@ -120,7 +120,7 @@ function defaultcloudrc()
 
 export NOINSTALLCLOUDPATTERN=1
 export cephvolumenumber=2
-export cloudsource=develcloudX
+export cloudsource=X
 export nodenumber=2
 export debug=0
 EOCLOUDRC
@@ -368,10 +368,10 @@ function smoke()
   defaultcloudrc cloud.rc
   case $pr_release in
     roxy)
-      sed -i -e "s/=develcloud.*/=develcloud3/g" cloud.rc
+      sed -i -e "s/cloudsource=.*/cloudsource=susecloud3/g" cloud.rc
     ;;
     pebbles)
-      sed -i -e "s/=develcloud.*/=develcloud2.0/g" cloud.rc
+      sed -i -e "s/cloudsource=.*/cloudsource=susecloud2.0/g" cloud.rc
     ;;
   esac
   $E smoker "$barclamps"
