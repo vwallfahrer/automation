@@ -367,6 +367,9 @@ function smoke()
 
   defaultcloudrc cloud.rc
   case $pr_release in
+    stoney)
+      sed -i -e "s/cloudsource=.*/cloudsource=develcloud4/g" cloud.rc
+    ;;
     roxy)
       sed -i -e "s/cloudsource=.*/cloudsource=susecloud3/g" cloud.rc
     ;;
