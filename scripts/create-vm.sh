@@ -7,7 +7,8 @@
 # Vagrantfiles.
 
 DEFAULT_HYPERVISOR="qemu:///system"
-DEFAULT_FSSIZE="24"
+DEFAULT_RAMSIZE=2
+DEFAULT_FSSIZE=24
 DEFAULT_CPUS=4
 DEFAULT_USE_CPU_HOST=true
 DEFAULT_CACHE_MODE=none
@@ -35,8 +36,9 @@ FILESYSTEM-PATH should be a directory on the host which you want
 share to the guest via a 9p virtio passthrough mount.
 
 Options:
-  -c URI, --connect URI  Connect to hypervisor at URI [$DEFAULT_HYPERVISOR]
   -h, --help             Show this help and exit
+  -c, --connect URI      Connect to hypervisor at URI [$DEFAULT_HYPERVISOR]
+  -r, --ramsize XX       Size of memory (in GB) [$DEFAULT_RAMSIZE]
   -s, --disksize XX      Size of VM-QCOW2-DISK (in GB) [$DEFAULT_FSSIZE]
   -C, --cpus XX          Number of virtual CPUs to assign [$DEFAULT_CPUS]
   -n, --no-cpu-host      Don´t use the option --cpu host for virt-install [$DEFAULT_USE_CPU_HOST]
@@ -48,6 +50,7 @@ EOF
 parse_args () {
     hypervisor="$DEFAULT_HYPERVISOR"
     vm_disk_size="${DEFAULT_FSSIZE}G"
+    vm_ram_size=$((${DEFAULT_RAMSIZE} * 1024))
     vm_vcpus="$DEFAULT_CPUS"
     use_cpu_host=$DEFAULT_USE_CPU_HOST
     cache_mode="$DEFAULT_CACHE_MODE"
@@ -59,6 +62,10 @@ parse_args () {
                 ;;
             -c|--connect)
                 hypervisor="$2"
+                shift 2
+                ;;
+            -r|--ramsize)
+                vm_ram_size=$((${2} * 1024))
                 shift 2
                 ;;
             -s|--disksize)
@@ -113,10 +120,9 @@ valid_bridge () {
 }
 
 main () {
-    # if [ `id -u` != 0 ]; then
-    #     echo "Please run as root." >&2
-    #     exit 1
-    # fi
+    if [ $EUID -eq 0 ]; then
+        echo "Maybe the VNC connection can't pop up if you run this as root"
+    fi
 
     parse_args "$@"
 
@@ -124,39 +130,65 @@ main () {
         usage "$vbridge is not a valid bridge device name"
     fi
 
+    if [[ $vm_disk =~ \qcow2$ ]]; then
+        vm_disk_path=$vm_disk,format=qcow2,cache=$cache_mode
+    else
+        vm_disk_path=$vm_disk,format=raw,cache=$cache_mode
+    fi
+
     if [ -e "$vm_disk" ]; then
         opts=(
             --import
-            # virt-install doesn't support "readonly=true"
         )
     else
-        echo "Creating $vm_disk with size $vm_disk_size as qcow2 image ..."
-        qemu-img create -f qcow2 "$vm_disk" "$vm_disk_size"
+        if [[ $vm_disk =~ ^/dev/mapper/[[:alnum:]]+ ]]; then
+            if ! hash sudo 2> /dev/null; then
+                echo "Please install sudo to use LVM volumes." >&2
+                exit 1
+            fi
+
+            lvm_combined=${vm_disk:12}
+
+            IFS="-"; declare -a lvm_values=($lvm_combined)
+
+            vm_lvm_group=${lvm_values[0]}
+            vm_lvm_name=${lvm_values[1]}
+
+            sudo lvcreate -L $vm_disk_size -n $vm_lvm_name $vm_lvm_group
+        elif [[ $vm_disk =~ ^/dev/[[:alnum:]]+/[[:alnum:]]+ ]]; then
+            if ! hash sudo 2> /dev/null; then
+                echo "Please install sudo to use LVM volumes." >&2
+                exit 1
+            fi
+
+            lvm_combined=${vm_disk:5}
+
+            IFS="/"; declare -a lvm_values=($lvm_combined)
+
+            vm_lvm_group=${lvm_values[0]}
+            vm_lvm_name=${lvm_values[1]}
+
+            sudo lvcreate -L $vm_disk_size -n $vm_lvm_name $vm_lvm_group
+        else
+            echo "Creating $vm_disk with size $vm_disk_size as qcow2 image ..."
+            qemu-img create -f qcow2 "$vm_disk" "$vm_disk_size"
+        fi
+
         opts=(
             --pxe
-            --boot network,hd,menu=on
+            --boot=network,hd,menu=on
         )
     fi
 
     if [ -n "$filesystem" ]; then
         opts+=(
-            --filesystem $filesystem,install
+            --filesystem="$filesystem",install
         )
     fi
 
-    # vm-install \
-    #     -n $vm_name \
-    #     -o sles11 \
-    #     -c4 \
-    #     -m2048 -M2048 \
-    #     -d qcow2:$vm_disk,xvda,disk,w,0,cachemode=$cache_mode \
-    #     -e \
-    #     --nic bridge=$vbridge,model=virtio \
-    #     --keymap en-us
-
     vm_cpu=""
     for plat in amd intel ; do
-        if grep -i $plat /proc/cpuinfo ; then
+        if [[ $(grep -i $plat /proc/cpuinfo) ]]; then
             if [ `id -u` == 0 ] ; then
                 echo "Running as root, invoking modprobe kvm_$plat."
                 if [ $plat = "intel" ] ; then
@@ -168,25 +200,26 @@ main () {
                 modprobe kvm_$plat
             fi
             if grep -q kvm_$plat /proc/modules && egrep -q "[Y1]" /sys/module/kvm_$plat/parameters/nested && $use_cpu_host; then
-                echo "Host CPU ($plat) supports nested virtualization and kvm_$plat module is loaded with nested=1, adding --cpu host"
-                vm_cpu="--cpu host"
+                vm_cpu="--cpu=host"
+                echo "Host CPU ($plat) supports nested virtualization and kvm_$plat module is loaded with nested=1, adding $vm_cpu"
             fi
         fi
     done
 
     virt-install \
-        --connect "$hypervisor" \
+        --connect "${hypervisor}" \
         --virt-type kvm \
-        --name "$vm_name" \
-        --ram 2048 \
-        --vcpus $vm_vcpus \
-        $vm_cpu \
-        "${opts[@]}" \
-        --disk path="$vm_disk,format=qcow2,cache=$cache_mode" \
+        --name "${vm_name}" \
+        --ram ${vm_ram_size} \
+        --vcpus ${vm_vcpus} \
+        "${vm_cpu}" \
+        --disk path="${vm_disk_path}" \
         --os-type=linux \
         --os-variant=sles11 \
-        --network bridge="$vbridge" \
-        --graphics vnc
+        --graphics=vnc \
+        --network bridge="${vbridge}" \
+        --disk path="${vm_disk_path}" \
+        "${opts[@]}"
 }
 
 main "$@"
