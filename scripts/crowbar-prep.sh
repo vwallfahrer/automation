@@ -188,7 +188,7 @@ Options:
   -p, --product-version      Set SUSE Cloud product version [$CLOUD_VERSION_DEFAULT]
   -d, --devel-cloud          zypper addrepo Devel:Cloud:\$version
   -s, --devel-cloud-staging  zypper addrepo Devel:Cloud:\$version:Staging
-  -l, --devel-cloud-mirrors  Get Devel:Cloud:* repos from same local mirror
+  -l, --local-cloud-mirrors  Get Devel:Cloud:* repos from same local mirror
                              as SP3-Pool / SP3-Updates instead of directly from IBS
                              (only with host-nfs profile)
   -n, --nfs-mirror PATH      Set path on host under which repos are NFS-exported
@@ -271,7 +271,7 @@ use_hae () {
 devel_cloud_shared_sp3_repo () {
     case $CLOUD_VERSION in
         2|3|4)
-            if [ -z "$local_devel_cloud_repos" ]; then
+            if [ -z "$local_cloud_mirror" ]; then
                 url=http://download.suse.de/ibs/Devel:/Cloud:/Shared:/11-SP3/standard/
             else
                 url=file://$DC_SHARED_MOUNTPOINT
@@ -285,7 +285,7 @@ devel_cloud_shared_sp3_repo () {
 devel_cloud_shared_sp3_update_repo () {
     case $CLOUD_VERSION in
         3|4)
-            if [ -z "$local_devel_cloud_repos" ]; then
+            if [ -z "$local_cloud_mirror" ]; then
                 url=http://download.suse.de/ibs/Devel:/Cloud:/Shared:/11-SP3:/Update/standard/
             else
                 url=file://$DC_SHARED_UPDATE_MOUNTPOINT
@@ -297,7 +297,7 @@ devel_cloud_shared_sp3_update_repo () {
 }
 
 devel_cloud_repo () {
-    if [ -z "$local_devel_cloud_repos" ]; then
+    if [ -z "$local_cloud_mirror" ]; then
         url=http://download.suse.de/ibs/Devel:/Cloud:/${CLOUD_VERSION}/SLE_11_SP3/
     else
         url=file://$DC_MOUNTPOINT
@@ -307,7 +307,7 @@ devel_cloud_repo () {
 }
 
 devel_cloud_staging_repo () {
-    if [ -z "$local_devel_cloud_repos" ]; then
+    if [ -z "$local_cloud_mirror" ]; then
         url=http://download.suse.de/ibs/Devel:/Cloud:/${CLOUD_VERSION}:/Staging/SLE_11_SP3/
     else
         url=file://$DC_STAGING_MOUNTPOINT
@@ -565,7 +565,7 @@ EOF
 parse_opts () {
     ibs_repo=
     set_sledgehammer_passwd=
-    local_devel_cloud_repos=
+    local_cloud_mirror=
 
     while [ $# != 0 ]; do
         case "$1" in
@@ -587,8 +587,8 @@ parse_opts () {
                 ibs_repo=staging
                 shift
                 ;;
-            -l|--local-devel-cloud-repos)
-                local_devel_cloud_repos=y
+            -l|--local-cloud-mirrors)
+                local_cloud_mirror=y
                 shift
                 ;;
             -r|--sledgehammer-root-pw)
@@ -621,7 +621,7 @@ parse_opts () {
     profile="$1"
 
     ibs_mirror=
-    if [ -n "$local_devel_cloud_repos" ]; then
+    if [ -n "$local_cloud_mirror" ]; then
         if [ -z "$ibs_repo" ]; then
             usage "-l is only valid with -d or -s"
         fi
