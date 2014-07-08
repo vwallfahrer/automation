@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Creates a fresh KVM VM via libvirt.  This can be used to create both
+# Creates a fresh KVM VM via libvirt. This can be used to create both
 # the Crowbar admin node VM and subsequent PXE-booting Crowbar nodes.
 #
 # FIXME: ideally this would eventually be replaced by one or more
@@ -11,6 +11,7 @@ DEFAULT_RAMSIZE=2
 DEFAULT_FSSIZE=24
 DEFAULT_CPUS=4
 DEFAULT_USE_CPU_HOST=true
+DEFAULT_IMPORT_IMAGE=false
 DEFAULT_CACHE_MODE=none
 
 usage () {
@@ -28,9 +29,13 @@ usage () {
     me=`basename $0`
 
     cat <<EOF >&2
-Usage: $me [options] VM-NAME VM-QCOW2-DISK VBRIDGE [FILESYSTEM-PATH]
+Usage: $me [options] VM-NAME VM-DISK VBRIDGE [FILESYSTEM-PATH]
 
-If VM-QCOW2-DISK does not already exist, it will be created.
+If VM-DISK does not already exist, it will be created. If you define
+and LVM path in a form of /dev/lvgroup/lvname and additional an image
+to import it converts the image into the LVM device. The path
+/dev/mapper/lvgroup-lvname is only supported if the volume name does
+not include dashes.
 
 FILESYSTEM-PATH should be a directory on the host which you want
 share to the guest via a 9p virtio passthrough mount.
@@ -42,6 +47,7 @@ Options:
   -s, --disksize XX      Size of VM-QCOW2-DISK (in GB) [$DEFAULT_FSSIZE]
   -C, --cpus XX          Number of virtual CPUs to assign [$DEFAULT_CPUS]
   -n, --no-cpu-host      Don´t use the option --cpu host for virt-install [$DEFAULT_USE_CPU_HOST]
+  -i, --import IMAGE     An image to import into LVM volume (Only for LVM disks)
   -d, --cache-mode MODE  Cache mode for disk
 EOF
     exit "$exit_code"
@@ -52,8 +58,9 @@ parse_args () {
     vm_disk_size="${DEFAULT_FSSIZE}G"
     vm_ram_size=$((${DEFAULT_RAMSIZE} * 1024))
     vm_vcpus="$DEFAULT_CPUS"
-    use_cpu_host=$DEFAULT_USE_CPU_HOST
     cache_mode="$DEFAULT_CACHE_MODE"
+    import_image=$DEFAULT_IMPORT_IMAGE
+    use_cpu_host=$DEFAULT_USE_CPU_HOST
 
     while [ $# != 0 ]; do
         case "$1" in
@@ -76,13 +83,17 @@ parse_args () {
                 vm_vcpus="$2"
                 shift 2
                 ;;
-            -n|--no-cpu-host)
-                use_cpu_host=false
-                shift 1
-                ;;
             -d|--cache-mode)
                 cache_mode="$2"
                 shift 2
+                ;;
+            -i|--import)
+                import_image="$2"
+                shift 2
+                ;;
+            -n|--no-cpu-host)
+                use_cpu_host=false
+                shift 1
                 ;;
             -*)
                 usage "Unrecognised option: $1"
@@ -103,8 +114,22 @@ parse_args () {
     filesystem="$4"
 }
 
+die () {
+    echo >&2 "$*"
+    exit 1
+}
+
 run_virsh () {
     LANG=C virsh -c "$hypervisor" "$@"
+}
+
+run_sudo () {
+    if ! hash sudo 2> /dev/null; then
+        echo "Please install sudo to use LVM volumes." >&2
+        exit 1
+    fi
+
+    LANG=C sudo -i "$@"
 }
 
 valid_bridge () {
@@ -117,6 +142,22 @@ valid_bridge () {
         fi
     done
     return 1
+}
+
+detect_lvm () {
+    local path="$1"
+
+    if [[ $path =~ ^/dev/mapper/[[:alnum:]]+ ]]; then
+        lvm_combined=${path:12}
+        IFS="-"; local -a lvm_values=($lvm_combined)
+    elif [[ $path =~ ^/dev/[[:alnum:]]+/[[:alnum:]]+ ]]; then
+        lvm_combined=${path:5}
+        IFS="/"; local -a lvm_values=($lvm_combined)
+    else
+        die "Failed to detect LVM group and volume"
+    fi
+
+    echo ${lvm_values[0]} ${lvm_values[1]}
 }
 
 main () {
@@ -136,42 +177,58 @@ main () {
         vm_disk_path=$vm_disk,format=raw,cache=$cache_mode
     fi
 
+    if [[ $import_image != false ]]; then
+        echo "Importing image from $import_image ..."
+
+        if [[ $import_image =~ ^(http|ftp) ]]; then
+            import_name=$(mktemp import-image.XXXXX)
+
+            wget -O ${import_name} ${import_image}
+            [[ $? -ne 0 ]] && die "Failed to download import image"
+        else
+            import_name=$import_image
+        fi
+
+        if [[ $vm_disk =~ ^/dev ]]; then
+            IFS=" "; declare -a lvm_values=($(detect_lvm $vm_disk))
+
+            vm_lvm_group=${lvm_values[0]}
+            vm_lvm_name=${lvm_values[1]}
+
+            echo "Creating LVM volume"
+            run_sudo lvcreate -L ${vm_disk_size} -n ${vm_lvm_name} ${vm_lvm_group}
+            [[ $? -ne 0 ]] && die "Failed to create LVM volume"
+
+            echo "Converting image to LVM"
+            run_sudo qemu-img convert ${import_name} -O host_device ${vm_disk}
+            [[ $? -ne 0 ]] && die "Failed to convert image to LVM"
+        else
+            echo "Moving import image"
+            cp ${import_name} ${vm_disk}
+            [[ $? -ne 0 ]] && die "Failed to move import image"
+        fi
+    fi
+
     if [ -e "$vm_disk" ]; then
         opts=(
             --import
         )
     else
-        if [[ $vm_disk =~ ^/dev/mapper/[[:alnum:]]+ ]]; then
-            if ! hash sudo 2> /dev/null; then
-                echo "Please install sudo to use LVM volumes." >&2
-                exit 1
-            fi
+        if [[ $vm_disk =~ ^/dev ]]; then
+            echo "Creating $vm_disk with size $vm_disk_size as LVM volume ..."
 
-            lvm_combined=${vm_disk:12}
-
-            IFS="-"; declare -a lvm_values=($lvm_combined)
+            IFS=" "; declare -a lvm_values=$(detect_lvm $vm_disk)
 
             vm_lvm_group=${lvm_values[0]}
             vm_lvm_name=${lvm_values[1]}
 
-            sudo lvcreate -L $vm_disk_size -n $vm_lvm_name $vm_lvm_group
-        elif [[ $vm_disk =~ ^/dev/[[:alnum:]]+/[[:alnum:]]+ ]]; then
-            if ! hash sudo 2> /dev/null; then
-                echo "Please install sudo to use LVM volumes." >&2
-                exit 1
-            fi
-
-            lvm_combined=${vm_disk:5}
-
-            IFS="/"; declare -a lvm_values=($lvm_combined)
-
-            vm_lvm_group=${lvm_values[0]}
-            vm_lvm_name=${lvm_values[1]}
-
-            sudo lvcreate -L $vm_disk_size -n $vm_lvm_name $vm_lvm_group
+            run_sudo lvcreate -L $vm_disk_size -n $vm_lvm_name $vm_lvm_group
+            [[ $? -ne 0 ]] && die "Failed to create LVM volume"
         else
             echo "Creating $vm_disk with size $vm_disk_size as qcow2 image ..."
+
             qemu-img create -f qcow2 "$vm_disk" "$vm_disk_size"
+            [[ $? -ne 0 ]] && die "Failed to create qcow2 image"
         fi
 
         opts=(
@@ -182,7 +239,7 @@ main () {
 
     if [ -n "$filesystem" ]; then
         opts+=(
-            --filesystem="$filesystem",install
+            --filesystem "$filesystem",install
         )
     fi
 
@@ -197,8 +254,10 @@ main () {
                         modprobe -r kvm_intel
                     fi
                 fi
+
                 modprobe kvm_$plat
             fi
+
             if grep -q kvm_$plat /proc/modules && egrep -q "[Y1]" /sys/module/kvm_$plat/parameters/nested && $use_cpu_host; then
                 vm_cpu="--cpu=host"
                 echo "Host CPU ($plat) supports nested virtualization and kvm_$plat module is loaded with nested=1, adding $vm_cpu"
@@ -207,16 +266,16 @@ main () {
     done
 
     virt-install \
+        --debug \
         --connect "${hypervisor}" \
         --virt-type kvm \
         --name "${vm_name}" \
-        --ram ${vm_ram_size} \
-        --vcpus ${vm_vcpus} \
+        --ram "${vm_ram_size}" \
+        --vcpus "${vm_vcpus}" \
         "${vm_cpu}" \
-        --disk path="${vm_disk_path}" \
-        --os-type=linux \
-        --os-variant=sles11 \
-        --graphics=vnc \
+        --os-type linux \
+        --os-variant sles11 \
+        --graphics vnc \
         --network bridge="${vbridge}" \
         --disk path="${vm_disk_path}" \
         "${opts[@]}"
