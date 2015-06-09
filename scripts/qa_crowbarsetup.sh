@@ -1205,6 +1205,7 @@ EOF
 function onadmin_installcrowbarfromgit()
 {
     cp -a /root/crowbar/change-image/dell/* /root/crowbar/extra/* /opt/dell/bin/
+    #sed -i -e 's/def verify_certificate_identity(cert, hostname)/&\n      return true if cert.nil?/' /tmp/ssl.rb # ugly hack for workarounding an unknown problem with gem install simplecov
     if iscloudver 5plus ; then
         # on SLE11 we dont have update-alternatives for ruby
         # but we need a "ruby" in PATH for various crowbar scripts
