@@ -1204,6 +1204,7 @@ EOF
 
 function onadmin_installcrowbarfromgit()
 {
+    cp -a /root/crowbar/change-image/dell/* /root/crowbar/extra/* /opt/dell/bin/
     if iscloudver 5plus ; then
         # on SLE11 we dont have update-alternatives for ruby
         # but we need a "ruby" in PATH for various crowbar scripts
