@@ -1708,7 +1708,6 @@ function custom_configuration()
     fi
 
     local sles12node=`get_sles12_node`
-    local sles12controller=`get_sles12_controller`
 
     ### NOTE: ONLY USE proposal_{set,modify}_value functions below this line
     ###       The edited proposal will be read and imported at the end
@@ -1721,32 +1720,42 @@ function custom_configuration()
             fi
         ;;
     esac
+
     if [ -n "$want_sles12_controller" ] ; then
+        local sles12controller=`get_sles12_controller`
+
         case "$proposal" in
             database|rabbitmq|keystone|glance|nova_dashboard|heat)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value ${proposal} default "['deployment']['${proposal}']['elements']['${proposal}-server']" "['$sles12controller']"
             ;;
             swift)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value swift default "['deployment']['swift']['elements']['swift-proxy']" "['$sles12controller']"
                 proposal_set_value swift default "['deployment']['swift']['elements']['swift-dispersion']" "['$sles12controller']"
                 proposal_set_value swift default "['deployment']['swift']['elements']['swift-ring-compute']" "['$sles12controller']"
             ;;
             cinder)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value cinder default "['deployment']['cinder']['elements']['cinder-controller']" "['$sles12controller']"
             ;;
             tempest)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value tempest default "['deployment']['tempest']['elements']['tempest']" "['$sles12controller']"
             ;;
             neutron)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value neutron default "['deployment']['neutron']['elements']['neutron-server']" "['$sles12controller']"
                 #FIXME: till bug#930986 this part can be enabled once again
                 # https://bugzilla.suse.com/show_bug.cgi?id=930986
                 #proposal_set_value neutron default "['deployment']['neutron']['elements']['neutron-network']" "['$sles12controller']"
             ;;
             nova)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value nova default "['deployment']['nova']['elements']['nova-multi-controller']" "['$sles12controller']"
             ;;
             ceilometer)
+                [ -n "$sles12controller" ] || complain 142 "'qa_crowbarsetup.sh: Cannot find sles12 controller!'"
                 proposal_set_value ceilometer default "['deployment']['ceilometer']['elements']['ceilometer-cagent']" "['$sles12controller']"
             ;;
         esac
