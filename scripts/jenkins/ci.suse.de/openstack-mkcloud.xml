@@ -187,6 +187,12 @@ Default: -t -s.</description>
           <triggerIfResult>allCases</triggerIfResult>
           <nodeEligibility class="org.jvnet.jenkins.plugins.nodelabelparameter.node.AllNodeEligibility"/>
         </org.jvnet.jenkins.plugins.nodelabelparameter.LabelParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>want_sles12_admin</name>
+          <description>enables deploying a sle12 admin node 
+#NOTE remove it once it is the default</description>
+          <defaultValue/>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
     <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.24">
