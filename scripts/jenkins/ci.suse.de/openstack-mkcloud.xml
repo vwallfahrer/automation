@@ -193,6 +193,21 @@ Default: -t -s.</description>
 #NOTE remove it once it is the default</description>
           <defaultValue/>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>admin_node_memory</name>
+          <description>Memory (in KByte) for the admin node</description>
+          <defaultValue/>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>controller_node_memory</name>
+          <description>Memory (in KByte) for the controller node</description>
+          <defaultValue/>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>compute_node_memory</name>
+          <description>Memory (in KByte) for the compute node(s)</description>
+          <defaultValue/>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
     <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.24">
