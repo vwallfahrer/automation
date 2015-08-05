@@ -70,7 +70,7 @@ also trigger on publish of iso</description>
               <properties>mode=basetest
 cloudsource=develcloud6
 nodenumber=2
-want_sles12=
+mkcloudtarget=all_noreboot
 mkcloudtarget=plain crowbarbackup crowbarrestore rebootcloud testsetup</properties>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
