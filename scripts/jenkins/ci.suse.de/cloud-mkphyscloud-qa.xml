@@ -42,7 +42,7 @@
         <hudson.model.StringParameterDefinition>
           <name>TESTHEAD</name>
           <description>if non-empty, test latest version from Devel:Cloud Staging</description>
-          <defaultValue/>
+          <defaultValue>1</defaultValue>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>libvirt_type</name>
@@ -102,7 +102,7 @@ rm -rf $artifacts_dir
 mkdir -p $artifacts_dir
 touch $artifacts_dir/.ignore
 cd /home/jenkins
-freshadminvm $admin
+freshadminvm_cloud6 $admin
 sleep 100 # time for the admin VM to boot
 
 
@@ -111,13 +111,12 @@ env | grep -e networking -e libvirt -e cloud &gt; mkcloud.config
 scp mkcloud.config root@$admin:
 ret=0
 ssh root@$admin "export cloud=$cloud; export UPDATEREPOS=$UPDATEREPOS ; export UPDATEBEFOREINSTALL=$UPDATEBEFOREINSTALL; export WITHREBOOT=$WITHREBOOT ; export TESTHEAD=$TESTHEAD ; export cloudsource=$cloudsource ; export libvirt_type=$libvirt_type ; export nodenumber=$nodenumber ; "'
-  zypper ar http://clouddata.cloud.suse.de/repos/SLES11-SP3-Updates/ sp3up
-  zypper -n up wget # for cert-check to work
+ 
   wget -Oqa_crowbarsetup.sh "https://raw.github.com/SUSE-Cloud/automation/master/scripts/qa_crowbarsetup.sh"
 
   [ $WITHREBOOT == "true" ] &amp;&amp; export rebootsteps="rebootcloud"
   [ $UPDATEBEFOREINSTALL == "true" ] &amp;&amp; export updatesteps="addupdaterepo runupdate"
-  timeout --signal=ALRM 150m bash -x -c ". qa_crowbarsetup.sh ; onadmin_runlist prepareinstallcrowbar addupdaterepo installcrowbar allocate $updatesteps waitcloud proposal run_cct testsetup $rebootsteps"
+  timeout --signal=ALRM 150m bash -x -c ". qa_crowbarsetup.sh ; onadmin_runlist prepareinstallcrowbar installcrowbar allocate waitcloud proposal run_cct testsetup $rebootsteps"
 ' || ret=$?
 echo "mkphyscloud ret=$ret"
 exit $ret
