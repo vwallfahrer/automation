@@ -113,7 +113,7 @@ scp mkcloud.config root@$admin:
 ret=0
 ssh root@$admin "export cloud=$cloud; export UPDATEREPOS=$UPDATEREPOS ; export UPDATEBEFOREINSTALL=$UPDATEBEFOREINSTALL; export WITHREBOOT=$WITHREBOOT ; export TESTHEAD=$TESTHEAD ; export cloudsource=$cloudsource ; export libvirt_type=$libvirt_type ; export nodenumber=$nodenumber ; "'
  
-  wget -Oqa_crowbarsetup.sh "https://raw.github.com/SUSE-Cloud/automation/master/scripts/qa_crowbarsetup.sh"
+  wget --no-check-certificate -Oqa_crowbarsetup.sh "https://raw.github.com/SUSE-Cloud/automation/master/scripts/qa_crowbarsetup.sh"
 
   [ $WITHREBOOT == "true" ] &amp;&amp; export rebootsteps="rebootcloud"
   [ $UPDATEBEFOREINSTALL == "true" ] &amp;&amp; export updatesteps="addupdaterepo runupdate"
