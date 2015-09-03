@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project>
   <actions/>
-  <description>Just a trigger to automatically trigger daily runs with docker enabled</description>
+  <description>Just a trigger to automatically trigger daily runs with raid setup for nodes.</description>
   <logRotator class="hudson.tasks.LogRotator">
     <daysToKeep>-1</daysToKeep>
     <numToKeep>7</numToKeep>
@@ -18,9 +18,9 @@
       <permission>hudson.model.Item.Discover:cloud</permission>
       <permission>hudson.model.Item.Build:cloud</permission>
       <permission>hudson.model.Item.Cancel:cloud</permission>
-      <permission>hudson.model.Item.Configure:cloud</permission>
-      <permission>hudson.model.Item.Delete:cloud</permission>
       <permission>hudson.model.Item.Workspace:cloud</permission>
+      <permission>hudson.model.Item.Delete:cloud</permission>
+      <permission>hudson.model.Item.Configure:cloud</permission>
       <permission>hudson.model.Run.Update:cloud</permission>
     </hudson.security.AuthorizationMatrixProperty>
     <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.25">
@@ -48,7 +48,8 @@
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>cloudsource=develcloud6
-want_docker=1</properties>
+raidvolumenumber=2
+want_raidtype=raid1</properties>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
           <projects>openstack-mkcloud</projects>
