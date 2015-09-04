@@ -348,6 +348,7 @@ echo "########################################################################"
 MKCLOUDTARGET=$mkcloudtarget
 [ $UPDATEBEFOREINSTALL == "true" ] &amp;&amp; MKCLOUDTARGET='cleanup prepare setupadmin addupdaterepo instcrowbar setupcompute instcompute proposal testsetup'
 
+
 if [ $WITHCROWBARREGISTER == "true" ] ; then
   export nodenumberlonelynode=1
   MKCLOUDTARGET="$MKCLOUDTARGET setuplonelynodes crowbar_register"
@@ -357,7 +358,7 @@ if [ -e mkcloud.pid ] ; then
     kill -KILL -`mkcloud.pid` ||: # make sure that the previous mkcloud (and subprocesses) are dead
 fi
 starttime=`date +%s`
-perl -e "alarm 4*60*60 ; exec '${automationrepo}/scripts/mkcloudhost/allocpool bash -x ${automationrepo}/scripts/mkcloud setuphost $(echo -n $MKCLOUDTARGET) ' " | tee $artifacts_dir/mkcloud_short_stdout.log
+perl -e "alarm 6*60*60 ; exec '${automationrepo}/scripts/mkcloudhost/allocpool bash -x ${automationrepo}/scripts/mkcloud setuphost $(echo -n $MKCLOUDTARGET) ' " | tee $artifacts_dir/mkcloud_short_stdout.log
 ret=${PIPESTATUS[0]}
 if [[ $ret != 0 ]] ; then
     [[ $github_pr_sha ]] &amp;&amp; mkcloudgating_trap
